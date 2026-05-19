@@ -146,11 +146,11 @@ with col2:
                             
                             if final_pdf:
                                 st.download_button(
-                                    label=f"📥 {passport_file.name} uchun PDF-ni yuklash",
-                                    data=final_pdf,
-                                    file_name=f"bilet_{passport_file.name}.pdf",
-                                    key=f"dl_btn_{index}"
-                                )
+        label="📥 Barcha biletlarni ZIP qilib yuklab olish",
+        data=zip_buffer.getvalue(),
+        file_name="Barcha_biletlar.zip",
+        mime="application/zip"
+    )
                         
                         # Limit himoyasi
                         if index < len(uploaded_passports) - 1 and len(api_keys) == 1:
