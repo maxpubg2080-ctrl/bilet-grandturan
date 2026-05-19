@@ -42,7 +42,7 @@ def pasport_va_biletni_tahlil_qilish(passport_image, bilet_matni):
     """
     
     try:
-        model = genai.GenerativeModel('gemini-2.5-flash')
+        model = genai.GenerativeModel('gemini-1.5-flash')
         # Limitga urilmaslik uchun rasmni siqamiz (kichraytiramiz)
         passport_image.thumbnail((800, 800))
         
