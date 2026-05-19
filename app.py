@@ -7,65 +7,86 @@ import json
 import time
 import re
 
-# O'zbekcha Streamlit interfeysi uchun maxsus moslashtirgich
-st.set_page_config(page_title="AI PDF Modifier", layout="wide")
+# Sahifa sozlamalari
+st.set_page_config(page_title="AI PDF Modifier Pro", layout="wide")
 
-# O'zbekcha nomlar bilan ishlash
+# Chap menyu - Bir nechta API kalit kiritish joyi
 with st.sidebar:
-    st.subheader("Sozlamalar")
-    api_key = st.text_input("Google Gemini API Kalitini kiriting:", type="password")
-    if api_key:
-        genai.configure(api_key=api_key)
+    st.subheader("🔑 AI Kalitlar Tizimi")
+    st.info("Limitdan qochish uchun bir nechta kalit kiritsangiz bo'ladi (vergul bilan ajrating)")
+    raw_keys = st.text_input("Gemini API Kalit(lar)ni kiriting:", type="password", help="Kalit1, Kalit2 formatida yozing")
+    
+    # Kalitlarni ro'yxatga olish
+    api_keys = [k.strip() for k in raw_keys.split(",")] if raw_keys else []
 
-st.title("AI Yordamida Bilet Ma'lumotlarini Avtomat Almashtirish 😉")
+st.title("AI Yordamida Bilet Ma'lumotlarini Avtomat Almashtirish 🚀")
 
-def pasport_va_biletni_tahlil_qilish(passport_image, bilet_matni):
+def pasport_va_biletni_tahlil_qilish(passport_image, bilet_matni, keys_list):
+    """Zaxira kalitlar bilan ishlovchi aqlli AI funksiyasi."""
     prompt = f"""
-    Siz aqlli hujjatchisiz. Bilet matni ichidan yo'lovchining ESKI ismi, ESKI pasport raqami va ESKI tug'ilgan sanasini aniqlang.
+    Siz aqlli hujjatchisiz. Bilet matni ichidan yo'lovchining ESKI ismi (F.I.O), ESKI pasport raqami va ESKI tug'ilgan sanasini aniqlang.
     Pasport rasmidan YANGI yo'lovchining ismi, pasport raqami va tug'ilgan sanasini o'qing.
     
     Bilet matni:
     \"\"\"{bilet_matni}\"\"\"
     
-    Natijani faqat mana shu JSON formatida qaytaring:
+    Natijani faqat mana shu JSON formatida qaytaring, boshqa matn qo'shmang:
     {{
       "eski_ism": "BILETDGI ESKI ISM",
       "eski_pasport": "BILETDAGI ESKI PASPORT",
       "eski_sana": "BILETDAGI ESKI SANA",
       "yangi_ism": "PASPORTDAGI YANGI ISM",
       "yangi_pasport": "PASPORTDAGI YANGI PASPORT",
-      "yangi_sana": "PASPORTDAGI YANGI SANA (Format: DD.MM.YYYY)"
+      "yangi_sana": "PASPORTDAGI YANGI SANA"
     }}
     """
-    try:
-        model = genai.GenerativeModel("gemini-2.5-flash")
-        passport_image.thumbnail((800, 800))
-        response = model.generate_content([prompt, passport_image])
-        json_match = re.search(r'\{.*\}', response.text, re.DOTALL)
-        if json_match:
-            return json.loads(json_match.group(0))
+    
+    if not keys_list:
+        st.error("API kalit kiritilmagan!")
         return None
-    except Exception as e:
-        st.error(f"AI tahlilida xatolik: {str(e)}")
-        return None
+
+    # Har bir kalitni navbatma-navbat sinab ko'radi (Limitdan qochish)
+    for current_key in keys_list:
+        try:
+            genai.configure(api_key=current_key)
+            model = genai.GenerativeModel("gemini-2.5-flash")
+            
+            # Rasmni siqish (Tezroq ishlashi va limitni tejash uchun)
+            passport_image.thumbnail((800, 800))
+            
+            response = model.generate_content([prompt, passport_image])
+            json_match = re.search(r'\{.*\}', response.text, re.DOTALL)
+            if json_match:
+                return json.loads(json_match.group(0))
+        except Exception as e:
+            if "429" in str(e) or "quota" in str(e).lower():
+                st.warning("Bitta kalitda limit tugadi, zaxiradagiga o'tilmoqda... 🔄")
+                continue
+            else:
+                st.error(f"Xatolik yuz berdi: {str(e)}")
+                return None
+    
+    st.error("❌ Barcha kiritilgan API kalitlarda limit tugadi! Biroz kuting yoki pullik rejimga o'ting.")
+    return None
 
 def tahrirlash_bilet(pdf_bytes, data):
     try:
         doc = fitz.open(stream=pdf_bytes, filetype="pdf")
         for page in doc:
-            if "eski_ism" in data and "yangi_ism" in data:
-                text_instances = page.search_for(data["eski_ism"])
-                for inst in text_instances:
+            if data.get("eski_ism") and data.get("yangi_ism"):
+                for inst in page.search_for(data["eski_ism"]):
                     page.add_redact_annot(inst, new_text=data["yangi_ism"])
-            if "eski_pasport" in data and "yangi_pasport" in data:
-                text_instances = page.search_for(data["eski_pasport"])
-                for inst in text_instances:
+            
+            if data.get("eski_pasport") and data.get("yangi_pasport"):
+                for inst in page.search_for(data["eski_pasport"]):
                     page.add_redact_annot(inst, new_text=data["yangi_pasport"])
-            if "eski_sana" in data and "yangi_sana" in data:
-                text_instances = page.search_for(data["eski_sana"])
-                for inst in text_instances:
+            
+            if data.get("eski_sana") and data.get("yangi_sana"):
+                for inst in page.search_for(data["eski_sana"]):
                     page.add_redact_annot(inst, new_text=data["yangi_sana"])
+                    
             page.apply_redactions()
+        
         out_pdf = io.BytesIO()
         doc.save(out_pdf)
         doc.close()
@@ -74,77 +95,69 @@ def tahrirlash_bilet(pdf_bytes, data):
         st.error(f"PDF tahrirlashda xatolik: {str(e)}")
         return None
 
-# Sahifa tuzilishi
-chap_ustun, ong_ustun = st.columns(2)
+# Interfeys qismi
+col1, col2 = st.columns(2)
 
-with chap_ustun:
+with col1:
     st.subheader("1. Hujjatlarni Yuklang")
-    yuklangan_bilet = st.file_uploader("Asl PDF biletni yuklang", type=["pdf"], key="bilet_pdf_main")
+    uploaded_pdf = st.file_uploader("Asl PDF biletni yuklang", type=["pdf"], key="main_pdf_uploader")
     
     st.write("---")
-    st.markdown("**Yangi yo'lovchilar pasportlarini alohida joylang (Maksimum 5 ta):**")
+    st.markdown("**Yangi yo'lovchilar pasportlarini yuklang (Bittalab, alohida uyalarga):**")
     
-    # 5 ta alohida, bir-biriga xalaqit bermaydigan o'zbekcha yuklash tugmalari
-    pasportlar_royxati = []
-    
-    p1 = st.file_uploader("👤 1-Yo'lovchi pasport rasmi", type=["png", "jpg", "jpeg"], key="p_tugma_1")
-    if p1: pasportlar_royxati.append(p1)
-        
-    p2 = st.file_uploader("👤 2-Yo'lovchi pasport rasmi", type=["png", "jpg", "jpeg"], key="p_tugma_2")
-    if p2: pasportlar_royxati.append(p2)
-        
-    p3 = st.file_uploader("👤 3-Yo'lovchi pasport rasmi", type=["png", "jpg", "jpeg"], key="p_tugma_3")
-    if p3: pasportlar_royxati.append(p3)
-        
-    p4 = st.file_uploader("👤 4-Yo'lovchi pasport rasmi", type=["png", "jpg", "jpeg"], key="p_tugma_4")
-    if p4: pasportlar_royxati.append(p4)
-        
-    p5 = st.file_uploader("👤 5-Yo'lovchi pasport rasmi", type=["png", "jpg", "jpeg"], key="p_tugma_5")
-    if p5: pasportlar_royxati.append(p5)
+    # 5 ta alohida pasport yuklash maydoni (Eski fayllar o'chib ketmaydi!)
+    uploaded_passports = []
+    for i in range(1, 6):
+        pass_file = st.file_uploader(f"👤 {i}-Yo'lovchi pasport rasmi", type=["png", "jpg", "jpeg"], key=f"passport_slot_{i}")
+        if pass_file:
+            uploaded_passports.append(pass_file)
 
-with ong_ustun:
+with col2:
     st.subheader("2. AI Avtomatizatsiya Jarayoni")
-    st.info("Har bir yuklangan pasport uchun alohida tayyor biletlar pastda yuklab olish uchun paydo bo'ladi.")
-
-    if api_key:
-        if st.button("AI orqali Avtomatik Almashtirish 🚀", key="start_ai_process"):
-            if yuklangan_bilet and pasportlar_royxati:
-                pdf_bytes = yuklangan_bilet.read()
+    
+    if api_keys:
+        if st.button("AI orqali Avtomatik Almashtirish 🚀", key="process_button"):
+            if uploaded_pdf and uploaded_passports:
+                pdf_bytes = uploaded_pdf.read()
+                
+                # Bilet matnini olish
                 doc_temp = fitz.open(stream=pdf_bytes, filetype="pdf")
                 bilet_matni = doc_temp[0].get_text()
                 doc_temp.close()
                 
-                st.write(f"📋 Jami yuklangan pasportlar: {len(pasportlar_royxati)} ta")
+                st.write(f"📋 Jami yuklangan pasportlar: {len(uploaded_passports)} ta")
                 
-                for indeks, pasport_fayl in enumerate(pasportlar_royxati):
-                    st.markdown(f"### 👤 {indeks+1}-Yo'lovchi: {pasport_fayl.name}")
+                for index, passport_file in enumerate(uploaded_passports):
+                    st.markdown(f"### 👤 Yo'lovchi {index+1}: {passport_file.name}")
+                    
                     with st.spinner("AI tahlil qilmoqda..."):
-                        pasport_tasvir = Image.open(pasport_fayl)
-                        ai_natija = pasport_va_biletni_tahlil_qilish(pasport_tasvir, bilet_matni)
+                        passport_image = Image.open(passport_file)
+                        ai_natija = pasport_va_biletni_tahlil_qilish(passport_image, bilet_matni, api_keys)
                         
                         if ai_natija:
-                            st.success(f"Aniqlangan ism: {ai_natija.get('yangi_ism', '')}")
-                            tayyor_bilet = tahrirlash_bilet(pdf_bytes, ai_natija)
+                            st.success(f"✅ AI topdi: {ai_natija.get('yangi_ism', '')}")
+                            final_pdf = tahrirlash_bilet(pdf_bytes, ai_natija)
                             
-                            if tayyor_bilet:
+                            if final_pdf:
                                 st.download_button(
-                                    label=f"📥 {pasport_fayl.name} uchun biletni yuklash",
-                                    data=tayyor_bilet,
-                                    file_name=f"tayyor_bilet_{indeks+1}.pdf",
+                                    label=f"📥 {passport_file.name} uchun tayyor PDF-ni yuklash",
+                                    data=final_pdf,
+                                    file_name=f"bilet_{passport_file.name}.pdf",
                                     mime="application/pdf",
-                                    key=f"yuklash_knopka_{indeks}"
+                                    key=f"dl_btn_{index}"
                                 )
                         
-                        if indeks < len(pasportlar_royxati) - 1:
-                            st.info("Limitdan qochish uchun 30 soniya kutilmoqda... ⏱️")
-                            time.sleep(30)
+                        # Kalitlar ko'p bo'lsa kutish vaqtini kamaytiramiz
+                        if index < len(uploaded_passports) - 1 and len(api_keys) == 1:
+                            st.info("Kutish rejimi: 15 soniya... ⏱️")
+                            time.sleep(15)
                             
                 st.balloons()
-                st.success("🎉 Barcha biletlar tayyor!")
+                st.success("🎉 Jarayon yakunlandi!")
             else:
-                st.warning("Iltimos, PDF bilet va kamida bitta pasport rasmini yuklang.")
+                st.warning("Iltimos, biletni va kamida bitta pasportni yuklang.")
     else:
-        st.warning("Dasturdan foydalanish uchun chap menyudan yangi Google Gemini API kalitini kiriting.")
+        st.warning("Dasturni ishlatish uchun chap menyudan API kalit kiriting.")
 
 st.write("---")
 st.caption("Dasturchi: Muxammadamin 😎")
