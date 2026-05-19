@@ -144,8 +144,7 @@ with col2:
                             st.success(f"✅ AI topdi: {ai_natija.get('yangi_ism', '')}")
                             final_pdf = tahrirlash_bilet(pdf_bytes, ai_natija)
                             
-                            if final_pdf:
-            # Hamma ish tugagach, bittada yuklab olish
+                            if final_pdf: # Hamma ish tugagach, bittada yuklab olish
 if 'processed_pdfs' in st.session_state and len(st.session_state.processed_pdfs) > 0:
     import zipfile
     zip_buffer = io.BytesIO()
