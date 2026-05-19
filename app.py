@@ -145,12 +145,19 @@ with col2:
                             final_pdf = tahrirlash_bilet(pdf_bytes, ai_natija)
                             
                             if final_pdf:
-                               st.download_button(
-                                    label=f"📥 {passport_file.name} uchun PDF-ni yuklash",
-                                    data=final_pdf,
-                                    file_name=f"bilet_{passport_file.name}.pdf",
-                                    key=f"dl_btn_{index}"
-                                )
+            # 1. PDF-ni xotiraga (session_state) qo'shib qo'yamiz
+            if 'processed_pdfs' not in st.session_state:
+                st.session_state.processed_pdfs = []
+            
+            st.session_state.processed_pdfs.append({"name": f"bilet_{passport_file.name}.pdf", "data": final_pdf})
+            
+            # 2. Har birini alohida yuklash tugmasi (buni o'chirmang)
+            st.download_button(
+                label=f"📥 {passport_file.name} uchun PDF-ni yuklash",
+                data=final_pdf,
+                file_name=f"bilet_{passport_file.name}.pdf",
+                key=f"dl_btn_{index}"
+            )
                         
                         # Limit himoyasi
                         if index < len(uploaded_passports) - 1 and len(api_keys) == 1:
