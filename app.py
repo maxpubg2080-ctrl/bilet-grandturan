@@ -98,7 +98,7 @@ col1, col2 = st.columns(2)
 with col1:
     st.subheader("1. Hujjatlarni Yuklang")
     uploaded_pdf = st.file_uploader("Asl PDF biletni yuklang", type=["pdf"])
-    uploaded_pass = st.file_uploader("Yangi yo'lovchi pasport rasmini yuklang", type=["png", "jpg", "jpeg"])
+    uploaded_pass = st.file_uploader("Yangi yo'lovchi pasport rasmini yuklang", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
 
 with col2:
     st.subheader("2. AI Avtomatizatsiya Jarayoni")
@@ -106,36 +106,39 @@ with col2:
     
     if api_key:
         if st.button("AI orqali Avtomatik Almashtirish 🚀"):
-            if uploaded_pdf and uploaded_pass:
-                with st.spinner("AI bilet matnini va pasport rasmini tahlil qilmoqda..."):
-                    
-                    # PDF ichidagi matnlarni AI o'qishi uchun ajratib olamiz
-                    pdf_bytes = uploaded_pdf.read()
-                    doc_temp = fitz.open(stream=pdf_bytes, filetype="pdf")
-                    bilet_matni = doc_temp[0].get_text()
-                    doc_temp.close()
-                    
-                    passport_image = Image.open(uploaded_pass)
+        if uploaded_pdf and uploaded_pass:
+            pdf_bytes = uploaded_pdf.read()
+            doc_temp = fitz.open(stream=pdf_bytes, filetype="pdf")
+            bilet_matni = doc_temp[0].get_text()
+            doc_temp.close()
+            
+            # Pasportlar ro'yxati bo'ylab ketma-ket aylanamiz
+            for index, passport_file in enumerate(uploaded_pass):
+                st.markdown(f"### 👤 {index+1}-Yo'lovchi: {passport_file.name}")
+                with st.spinner(f"Tahlil qilinmoqda..."):
+                    passport_image = Image.open(passport_file)
                     
                     # AI funksiyasini chaqiramiz
                     ai_natija = pasport_va_biletni_tahlil_qilish(passport_image, bilet_matni)
                     
-                if ai_natija:
-                    st.write("🔍 **AI aniqlagan ma'lumotlar:**")
-                    st.success(f"O'chirilayotgan eski ma'lumot: {ai_natija['eski_ism']} ({ai_natija['eski_pasport']})")
-                    st.info(f"Yozilayotgan yangi ma'lumot: {ai_natija['yangi_ism']} ({ai_natija['yangi_pasport']})")
+                    if ai_natija:
+                        st.success(f"O'zgartirilmoqda: {ai_natija.get('yangi_ism', '')} {ai_natija.get('yangi_familiya', '')}")
+                        final_pdf = tahrirlash_bilet(pdf_bytes, ai_natija)
+                        
+                        if final_pdf:
+                            # Har bir pasport uchun alohida yuklash tugmasi
+                            st.download_button(
+                                label=f"📥 {passport_file.name} uchun biletni yuklash",
+                                data=final_pdf,
+                                file_name=f"bileti_{passport_file.name}.pdf",
+                                mime="application/pdf",
+                                key=f"btn_{index}"
+                            )
                     
-                    # Biletni tahrirlash
-                    final_pdf = tahrirlash_bilet(pdf_bytes, ai_natija)
-                    
-                    if final_pdf:
-                        st.balloons()
-                        st.success("Bilet ideal tarzda tayyorlandi!")
-                        st.download_button(
-                            label="Yangilangan PDF biletni yuklab olish ✨",
-                            data=final_pdf,
-                            file_name="ai_yangilangan_bilet.pdf",
-                            mime="application/pdf"
+                    # Limitga tushmaslik uchun (oxirgisidan tashqari) 30 soniya kutamiz
+                    if index < len(uploaded_pass) - 1:
+                        st.info("Keyingi pasportga o'tish uchun 30 soniya kutilmoqda... ⏱️")
+                        time.sleep(30)
                         )
                 else:
                     st.error("AI hujjatlarni tahlil qila olmadi. API kalitni yoki rasmni tekshiring.")
