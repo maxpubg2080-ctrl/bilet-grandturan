@@ -67,42 +67,31 @@ def pasport_va_biletni_tahlil_qilish(passport_image, bilet_matni, keys_list):
     st.error("❌ Barcha kiritilgan API kalitlarda limit tugadi!")
     return None
 
-def tahrirlash_bilet(pdf_data, data):
-    """AI topgan eski matnlarni bilet ichidan qidirib topadi va chiziqlarni buzmasdan o'chirib, yangisini yozadi."""
-    doc = fitz.open(stream=pdf_data, filetype="pdf")
-    page = doc[0]
-    
-    # AI topgan eski matnlarni bilet ichidan qidirish
-    blok_ism = page.search_for(data["eski_ism"].strip())
-    blok_pasport = page.search_for(data["eski_pasport"].strip())
-    blok_sana = page.search_for(data["eski_sana"].strip())
-    
-    # 1. Ismni almashtirish
-    if blok_ism:
-        rect = blok_ism[0]
-        safe_rect = fitz.Rect(rect.x0, rect.y0 + 1, rect.x1, rect.y1 - 1)
-        page.draw_rect(safe_rect, color=(1, 1, 1), fill=(1, 1, 1))
-        page.insert_text((rect.x0, rect.y1 - 2), data["yangi_ism"].upper(), fontname="helvetica", fontsize=8.5, color=(0, 0, 0))
+def tahrirlash_bilet(pdf_bytes, data):
+    try:
+        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        for page in doc:
+            if data.get("eski_ism") and data.get("yangi_ism"):
+                for inst in page.search_for(data["eski_ism"]):
+                    page.add_redact_annot(inst, new_text=data["yangi_ism"])
+            
+            if data.get("eski_pasport") and data.get("yangi_pasport"):
+                for inst in page.search_for(data["eski_pasport"]):
+                    page.add_redact_annot(inst, new_text=data["yangi_pasport"])
+            
+            if data.get("eski_sana") and data.get("yangi_sana"):
+                for inst in page.search_for(data["eski_sana"]):
+                    page.add_redact_annot(inst, new_text=data["yangi_sana"])
+                    
+            page.apply_redactions()
         
-    # 2. Pasportni almashtirish
-    if blok_pasport:
-        rect = blok_pasport[0]
-        safe_rect = fitz.Rect(rect.x0, rect.y0 + 1, rect.x1, rect.y1 - 1)
-        page.draw_rect(safe_rect, color=(1, 1, 1), fill=(1, 1, 1))
-        page.insert_text((rect.x0, rect.y1 - 2), data["yangi_pasport"].upper(), fontname="helvetica", fontsize=8.5, color=(0, 0, 0))
-        
-    # 3. Sanani almashtirish
-    if blok_sana:
-        rect = blok_sana[0]
-        safe_rect = fitz.Rect(rect.x0, rect.y0 + 1, rect.x1, rect.y1 - 1)
-        page.draw_rect(safe_rect, color=(1, 1, 1), fill=(1, 1, 1))
-        page.insert_text((rect.x0, rect.y1 - 2), data["yangi_sana"], fontname="helvetica", fontsize=8.5, color=(0, 0, 0))
-
-    output = io.BytesIO()
-    doc.save(output)
-    doc.close()
-    output.seek(0)
-    return output
+        out_pdf = io.BytesIO()
+        doc.save(out_pdf)
+        doc.close()
+        return out_pdf.getvalue()
+    except Exception as e:
+        st.error(f"PDF tahrirlashda xatolik: {str(e)}")
+        return None
 
 # Interfeys qismi
 col1, col2 = st.columns(2)
@@ -144,8 +133,8 @@ with col2:
                             st.success(f"✅ AI topdi: {ai_natija.get('yangi_ism', '')}")
                             final_pdf = tahrirlash_bilet(pdf_bytes, ai_natija)
                             
-                            iif final_pdf:
-                               st.download_button(
+                            if final_pdf:
+                                st.download_button(
                                     label=f"📥 {passport_file.name} uchun PDF-ni yuklash",
                                     data=final_pdf,
                                     file_name=f"bilet_{passport_file.name}.pdf",
