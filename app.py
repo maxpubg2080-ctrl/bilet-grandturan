@@ -94,7 +94,7 @@ with col1:
     st.write("---")
     st.markdown("**Yangi yo'lovchilar pasportlarini alohida yuklang (Maksimum 10 ta):**")
     
-    # 10 TA PASPORT UCHUN ALOHIDA ME'NU
+    # 10 ta alohida pasport yuklash menyusi
     uploaded_passports = []
     for i in range(1, 11):
         pass_file = st.file_uploader(f"Yangi yo'lovchi pasport rasmini yuklang - {i}-yo'lovchi", type=["png", "jpg", "jpeg"], key=f"pass_field_{i}")
@@ -103,7 +103,7 @@ with col1:
 
 with col2:
     st.subheader("2. AI Avtomatizatsiya Jarayoni")
-    st.info("Siz hech qanday ma'lumotni qo'lda yozmaysiz. AI bilet ichidagi eski ma'lumotlarni ham, pasportdagi yangi ma'lumotlarni ham o'zi solishtirib tahrirlaydi.")
+    st.info("AI bilet ichidagi eski ma'lumotlarni ham, pasportdagi yangi ma'lumotlarni ham o'zi solishtirib tahrirlaydi.")
 
     if api_key:
         if st.button("AI orqali Avtomatik Almashtirish 🚀"):
@@ -147,6 +147,6 @@ with col2:
     else:
         st.warning("Dasturdan foydalanish uchun chap menyudan yangi Google Gemini API kalitini kiriting.")
 
-# Mualliflik muhri
+# Mualliflik
 st.write("---")
 st.caption("Dasturchi: Muxammadamin 😎")
