@@ -10,7 +10,7 @@ import re
 # Sahifa sozlamalari
 st.set_page_config(page_title="AI PDF Modifier Pro", layout="wide")
 
-# Chap menyu - Bir nechta tekin API kalit kiritish joyi
+# Chap menyu - Bir nechta API kalit kiritish joyi
 with st.sidebar:
     st.subheader("🔑 AI Kalitlar Tizimi")
     st.info("Limitdan qochish uchun bir nechta kalit kiritsangiz bo'ladi (vergul bilan ajrating)")
@@ -45,15 +45,13 @@ def pasport_va_biletni_tahlil_qilish(passport_image, bilet_matni, keys_list):
         st.error("API kalit kiritilmagan!")
         return None
 
-    # Har bir kalitni ketma-ket sinab ko'radi (Limitdan qochish uchun)
+    # Har bir kalitni ketma-ket sinab ko'radi
     for current_key in keys_list:
         try:
             genai.configure(api_key=current_key)
             model = genai.GenerativeModel("gemini-2.5-flash")
             
-            # Rasmni siqish (Tezroq ishlashi va limitni tejash uchun)
             passport_image.thumbnail((800, 800))
-            
             response = model.generate_content([prompt, passport_image])
             json_match = re.search(r'\{.*\}', response.text, re.DOTALL)
             if json_match:
@@ -66,7 +64,7 @@ def pasport_va_biletni_tahlil_qilish(passport_image, bilet_matni, keys_list):
                 st.error(f"Xatolik yuz berdi: {str(e)}")
                 return None
     
-    st.error("❌ Barcha kiritilgan API kalitlarda limit tugadi! Biroz kuting.")
+    st.error("❌ Barcha kiritilgan API kalitlarda limit tugadi!")
     return None
 
 def tahrirlash_bilet(pdf_bytes, data):
@@ -100,23 +98,21 @@ col1, col2 = st.columns(2)
 
 with col1:
     st.subheader("1. Hujjatlarni Yuklang")
-    uploaded_pdf = st.file_uploader("Asl PDF biletni yuklang", type=["pdf"], key="main_pdf_uploader")
+    uploaded_pdf = st.file_uploader("Asl PDF biletni yuklang", type=["pdf"])
     
     st.write("---")
-    st.markdown("**Yangi yo'lovchilar pasportlarini yuklang (Alohida uychalarga):**")
-    
-    # 5 ta alohida pasport yuklash joyi (Eski yuklangan fayllar mutlaqo o'chib ketmaydi!)
-    uploaded_passports = []
-    for i in range(1, 6):
-        pass_file = st.file_uploader(f"👤 {i}-Yo'lovchi pasport rasmi", type=["png", "jpg", "jpeg"], key=f"passport_slot_{i}")
-        if pass_file:
-            uploaded_passports.append(pass_file)
+    # CRITICAL FIX: accept_multiple_files=True qo'shildi! Endi + bosganda yo'qolmaydi.
+    uploaded_passports = st.file_uploader(
+        "Yangi yo'lovchilar pasport rasmlarini yuklang (Bir nechta yuklash mumkin ➕)", 
+        type=["png", "jpg", "jpeg"], 
+        accept_multiple_files=True
+    )
 
 with col2:
     st.subheader("2. AI Avtomatizatsiya Jarayoni")
     
     if api_keys:
-        if st.button("AI orqali Avtomatik Almashtirish 🚀", key="process_button"):
+        if st.button("AI orqali Avtomatik Almashtirish 🚀"):
             if uploaded_pdf and uploaded_passports:
                 pdf_bytes = uploaded_pdf.read()
                 
@@ -139,20 +135,21 @@ with col2:
                             
                             if final_pdf:
                                 st.download_button(
-                                    label=f"📥 {passport_file.name} uchun tayyor PDF-ni yuklash",
+                                    label=f"📥 {passport_file.name} uchun PDF-ni yuklash",
                                     data=final_pdf,
                                     file_name=f"bilet_{passport_file.name}.pdf",
                                     key=f"dl_btn_{index}"
                                 )
                         
+                        # Limit himoyasi
                         if index < len(uploaded_passports) - 1 and len(api_keys) == 1:
                             st.info("Kutish rejimi: 15 soniya... ⏱️")
                             time.sleep(15)
                             
                 st.balloons()
-                st.success("🎉 Jarayon yakunlandi!")
+                st.success("🎉 Barcha biletlar muvaffaqiyatli tayyorlandi!")
             else:
-                st.warning("Iltimos, biletni va kamida bitta pasportni yuklang.")
+                st.warning("Iltimos, biletni va pasport(lar)ni yuklang.")
     else:
         st.warning("Dasturni ishlatish uchun chap menyudan API kalit kiriting.")
 
