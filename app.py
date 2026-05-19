@@ -94,10 +94,10 @@ with col1:
     st.write("---")
     st.markdown("**Yangi yo'lovchilar pasportlarini alohida yuklang (Maksimum 10 ta):**")
     
-    # 10 ta alohida pasport yuklash menyusi
+    # 10 ta alohida pasport yuklash maydoni
     uploaded_passports = []
     for i in range(1, 11):
-        pass_file = st.file_uploader(f"Yangi yo'lovchi pasport rasmini yuklang - {i}-yo'lovchi", type=["png", "jpg", "jpeg"], key=f"pass_field_{i}")
+        pass_file = st.file_uploader(f"👤 {i}-Yo'lovchi pasport rasmi", type=["png", "jpg", "jpeg"], key=f"pass_field_{i}")
         if pass_file:
             uploaded_passports.append(pass_file)
 
@@ -135,13 +135,13 @@ with col2:
                                     key=f"btn_dl_{index}"
                                 )
                         
-                        # Bepul limit himoyasi uchun har safar 30 soniya kutamiz
+                        # Limitga tushmaslik uchun har safar 30 soniya kutamiz
                         if index < len(uploaded_passports) - 1:
                             st.info("Keyingi pasportga o'tish uchun 30 soniya kutilmoqda... ⏱️")
                             time.sleep(30)
                             
                 st.balloons()
-                st.success("🎉 Barcha yuklangan biletlar tayyorlandi!")
+                st.success("🎉 Barcha yuklangan biletlar muvaffaqiyatli tayyorlandi!")
             else:
                 st.warning("Iltimos, PDF bilet va kamida bitta pasport rasmini yuklang.")
     else:
