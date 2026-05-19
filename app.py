@@ -143,5 +143,5 @@ with col2:
                 st.warning("Iltimos, PDF bilet va pasport rasmini yuklang.")
     else:
         st.warning("Dasturni ishlatish uchun chap menyudan yangi Google Gemini API kalitini kiriting.")
-        st.write(muxammadamin)
-st.caption("Dasturchi: muxammadamin 😎")
+        st.write("muhammadmin")
+st.caption("Dasturchi: Muxammadamin 😎")
