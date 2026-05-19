@@ -10,7 +10,7 @@ import re
 # Sahifa sozlamalari
 st.set_page_config(page_title="AI PDF Modifier Pro", layout="wide")
 
-# Chap menyu - Bir nechta API kalit kiritish joyi
+# Chap menyu - Bir nechta tekin API kalit kiritish joyi
 with st.sidebar:
     st.subheader("🔑 AI Kalitlar Tizimi")
     st.info("Limitdan qochish uchun bir nechta kalit kiritsangiz bo'ladi (vergul bilan ajrating)")
@@ -19,12 +19,12 @@ with st.sidebar:
     # Kalitlarni ro'yxatga olish
     api_keys = [k.strip() for k in raw_keys.split(",")] if raw_keys else []
 
-st.title("AI Yordamida Bilet Ma'lumotlarini Avtomat Almashtirish 🚀")
+st.title("AI Yordamida Bilet Ma'lumotlarini Avtomat Almashtirish Pro 🚀")
 
 def pasport_va_biletni_tahlil_qilish(passport_image, bilet_matni, keys_list):
     """Zaxira kalitlar bilan ishlovchi aqlli AI funksiyasi."""
     prompt = f"""
-    Siz aqlli hujjatchisiz. Bilet matni ichidan yo'lovchining ESKI ismi (F.I.O), ESKI pasport raqami va ESKI tug'ilgan sanasini aniqlang.
+    Siz aqlli hujjatchisiz. Bilet matni ichidan yo'lovchining ESKI ismi, ESKI pasport raqami va ESKI tug'ilgan sanasini aniqlang.
     Pasport rasmidan YANGI yo'lovchining ismi, pasport raqami va tug'ilgan sanasini o'qing.
     
     Bilet matni:
@@ -45,7 +45,7 @@ def pasport_va_biletni_tahlil_qilish(passport_image, bilet_matni, keys_list):
         st.error("API kalit kiritilmagan!")
         return None
 
-    # Har bir kalitni navbatma-navbat sinab ko'radi (Limitdan qochish)
+    # Har bir kalitni ketma-ket sinab ko'radi (Limitdan qochish uchun)
     for current_key in keys_list:
         try:
             genai.configure(api_key=current_key)
@@ -66,7 +66,7 @@ def pasport_va_biletni_tahlil_qilish(passport_image, bilet_matni, keys_list):
                 st.error(f"Xatolik yuz berdi: {str(e)}")
                 return None
     
-    st.error("❌ Barcha kiritilgan API kalitlarda limit tugadi! Biroz kuting yoki pullik rejimga o'ting.")
+    st.error("❌ Barcha kiritilgan API kalitlarda limit tugadi! Biroz kuting.")
     return None
 
 def tahrirlash_bilet(pdf_bytes, data):
@@ -103,9 +103,9 @@ with col1:
     uploaded_pdf = st.file_uploader("Asl PDF biletni yuklang", type=["pdf"], key="main_pdf_uploader")
     
     st.write("---")
-    st.markdown("**Yangi yo'lovchilar pasportlarini yuklang (Bittalab, alohida uyalarga):**")
+    st.markdown("**Yangi yo'lovchilar pasportlarini yuklang (Alohida uychalarga):**")
     
-    # 5 ta alohida pasport yuklash maydoni (Eski fayllar o'chib ketmaydi!)
+    # 5 ta alohida pasport yuklash joyi (Eski yuklangan fayllar mutlaqo o'chib ketmaydi!)
     uploaded_passports = []
     for i in range(1, 6):
         pass_file = st.file_uploader(f"👤 {i}-Yo'lovchi pasport rasmi", type=["png", "jpg", "jpeg"], key=f"passport_slot_{i}")
@@ -120,7 +120,6 @@ with col2:
             if uploaded_pdf and uploaded_passports:
                 pdf_bytes = uploaded_pdf.read()
                 
-                # Bilet matnini olish
                 doc_temp = fitz.open(stream=pdf_bytes, filetype="pdf")
                 bilet_matni = doc_temp[0].get_text()
                 doc_temp.close()
@@ -143,11 +142,9 @@ with col2:
                                     label=f"📥 {passport_file.name} uchun tayyor PDF-ni yuklash",
                                     data=final_pdf,
                                     file_name=f"bilet_{passport_file.name}.pdf",
-                                    mime="application/pdf",
                                     key=f"dl_btn_{index}"
                                 )
                         
-                        # Kalitlar ko'p bo'lsa kutish vaqtini kamaytiramiz
                         if index < len(uploaded_passports) - 1 and len(api_keys) == 1:
                             st.info("Kutish rejimi: 15 soniya... ⏱️")
                             time.sleep(15)
