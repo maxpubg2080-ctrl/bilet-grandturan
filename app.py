@@ -1,25 +1,27 @@
 import streamlit as st
 import google.generativeai as genai
 import fitz  # PyMuPDF
-import io
-import re
-import json
 from PIL import Image
+import io
+import json
+import time
+import re
 
 # Sahifa sozlamalari
 st.set_page_config(page_title="AI PDF Modifier", layout="wide")
-st.title("AI Yordamida Bilet Ma'lumotlarini Avtomat Almashtirish 🤖")
 
-# API Kalitni avtomatik sozlash (Yoki yon menyudan kiritish)
+# Chap menyu (Sidebar) - API Kalit uchun
 with st.sidebar:
     st.subheader("Sozlamalar")
     api_key = st.text_input("Google Gemini API Kalitini kiriting:", type="password")
     if api_key:
         genai.configure(api_key=api_key)
 
+st.title("AI Yordamida Bilet Ma'lumotlarini Avtomat Almashtirish 😉")
+
+# AI funksiyasi
 def pasport_va_biletni_tahlil_qilish(passport_image, bilet_matni):
     """AI bilet ichidagi eski ma'lumotlarni va pasportdagi yangi ma'lumotlarni o'zi topadi."""
-    
     prompt = f"""
     Siz aqlli hujjatchisiz. Sizga bilet ichidagi matn va yangi yo'lovchining pasport rasmi berilgan.
     
@@ -40,10 +42,8 @@ def pasport_va_biletni_tahlil_qilish(passport_image, bilet_matni):
       "yangi_sana": "PASPORTDAGI YANGI SANA (Format: DD.MM.YYYY)"
     }}
     """
-    
     try:
         model = genai.GenerativeModel("gemini-2.5-flash")
-        # Limitga urilmaslik uchun rasmni siqamiz (kichraytiramiz)
         passport_image.thumbnail((800, 800))
         
         response = model.generate_content([prompt, passport_image])
@@ -52,45 +52,37 @@ def pasport_va_biletni_tahlil_qilish(passport_image, bilet_matni):
             return json.loads(json_match.group(0))
         return None
     except Exception as e:
-        st.error(f"AI tahlilida xatolik: {e}")
+        st.error(f"AI tahlilida xatolik: {str(e)}")
         return None
 
-def tahrirlash_bilet(pdf_data, data):
-    """AI topgan eski matnlarni bilet ichidan qidirib topadi va chiziqlarni buzmasdan o'chirib, yangisini yozadi."""
-    doc = fitz.open(stream=pdf_data, filetype="pdf")
-    page = doc[0]
-    
-    # AI topgan eski matnlarni bilet ichidan qidirish
-    blok_ism = page.search_for(data["eski_ism"].strip())
-    blok_pasport = page.search_for(data["eski_pasport"].strip())
-    blok_sana = page.search_for(data["eski_sana"].strip())
-    
-    # 1. Ismni almashtirish
-    if blok_ism:
-        rect = blok_ism[0]
-        safe_rect = fitz.Rect(rect.x0, rect.y0 + 1, rect.x1, rect.y1 - 1)
-        page.draw_rect(safe_rect, color=(1, 1, 1), fill=(1, 1, 1))
-        page.insert_text((rect.x0, rect.y1 - 2), data["yangi_ism"].upper(), fontname="helvetica", fontsize=8.5, color=(0, 0, 0))
+def tahrirlash_bilet(pdf_bytes, data):
+    try:
+        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        for page in doc:
+            if "eski_ism" in data and "yangi_ism" in data:
+                text_instances = page.search_for(data["eski_ism"])
+                for inst in text_instances:
+                    page.add_redact_annot(inst, new_text=data["yangi_ism"])
+            
+            if "eski_pasport" in data and "yangi_pasport" in data:
+                text_instances = page.search_for(data["eski_pasport"])
+                for inst in text_instances:
+                    page.add_redact_annot(inst, new_text=data["yangi_pasport"])
+            
+            if "eski_sana" in data and "yangi_sana" in data:
+                text_instances = page.search_for(data["eski_sana"])
+                for inst in text_instances:
+                    page.add_redact_annot(inst, new_text=data["yangi_sana"])
+                    
+            page.apply_redactions()
         
-    # 2. Pasportni almashtirish
-    if blok_pasport:
-        rect = blok_pasport[0]
-        safe_rect = fitz.Rect(rect.x0, rect.y0 + 1, rect.x1, rect.y1 - 1)
-        page.draw_rect(safe_rect, color=(1, 1, 1), fill=(1, 1, 1))
-        page.insert_text((rect.x0, rect.y1 - 2), data["yangi_pasport"].upper(), fontname="helvetica", fontsize=8.5, color=(0, 0, 0))
-        
-    # 3. Sanani almashtirish
-    if blok_sana:
-        rect = blok_sana[0]
-        safe_rect = fitz.Rect(rect.x0, rect.y0 + 1, rect.x1, rect.y1 - 1)
-        page.draw_rect(safe_rect, color=(1, 1, 1), fill=(1, 1, 1))
-        page.insert_text((rect.x0, rect.y1 - 2), data["yangi_sana"], fontname="helvetica", fontsize=8.5, color=(0, 0, 0))
-
-    output = io.BytesIO()
-    doc.save(output)
-    doc.close()
-    output.seek(0)
-    return output
+        out_pdf = io.BytesIO()
+        doc.save(out_pdf)
+        doc.close()
+        return out_pdf.getvalue()
+    except Exception as e:
+        st.error(f"PDF tahrirlashda xatolik: {str(e)}")
+        return None
 
 # UI qismi
 col1, col2 = st.columns(2)
@@ -98,62 +90,63 @@ col1, col2 = st.columns(2)
 with col1:
     st.subheader("1. Hujjatlarni Yuklang")
     uploaded_pdf = st.file_uploader("Asl PDF biletni yuklang", type=["pdf"])
-    uploaded_pass = st.file_uploader("Yangi yo'lovchi pasport rasmini yuklang", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
+    
+    st.write("---")
+    st.markdown("**Yangi yo'lovchilar pasportlarini alohida yuklang (Maksimum 10 ta):**")
+    
+    # 10 TA PASPORT UCHUN ALOHIDA ME'NU
+    uploaded_passports = []
+    for i in range(1, 11):
+        pass_file = st.file_uploader(f"Yangi yo'lovchi pasport rasmini yuklang - {i}-yo'lovchi", type=["png", "jpg", "jpeg"], key=f"pass_field_{i}")
+        if pass_file:
+            uploaded_passports.append(pass_file)
 
 with col2:
     st.subheader("2. AI Avtomatizatsiya Jarayoni")
     st.info("Siz hech qanday ma'lumotni qo'lda yozmaysiz. AI bilet ichidagi eski ma'lumotlarni ham, pasportdagi yangi ma'lumotlarni ham o'zi solishtirib tahrirlaydi.")
-    
+
     if api_key:
         if st.button("AI orqali Avtomatik Almashtirish 🚀"):
-        if uploaded_pdf and uploaded_pass:
-            pdf_bytes = uploaded_pdf.read()
-            doc_temp = fitz.open(stream=pdf_bytes, filetype="pdf")
-            bilet_matni = doc_temp[0].get_text()
-            doc_temp.close()
-            
-            # Pasportlar ro'yxati bo'ylab ketma-ket aylanamiz
-            for index, passport_file in enumerate(uploaded_pass):
-                st.markdown(f"### 👤 {index+1}-Yo'lovchi: {passport_file.name}")
-                with st.spinner(f"Tahlil qilinmoqda..."):
-                    passport_image = Image.open(passport_file)
-                    
-                    # AI funksiyasini chaqiramiz
-                    ai_natija = pasport_va_biletni_tahlil_qilish(passport_image, bilet_matni)
-                    
-                    if ai_natija:
-                        st.success(f"O'zgartirilmoqda: {ai_natija.get('yangi_ism', '')} {ai_natija.get('yangi_familiya', '')}")
-                        final_pdf = tahrirlash_bilet(pdf_bytes, ai_natija)
+            if uploaded_pdf and uploaded_passports:
+                pdf_bytes = uploaded_pdf.read()
+                doc_temp = fitz.open(stream=pdf_bytes, filetype="pdf")
+                bilet_matni = doc_temp[0].get_text()
+                doc_temp.close()
+                
+                st.write(f"📋 Jami yuklangan pasportlar soni: {len(uploaded_passports)} ta")
+                
+                for index, passport_file in enumerate(uploaded_passports):
+                    st.markdown(f"### 👤 {index+1}-Yo'lovchi: {passport_file.name}")
+                    with st.spinner("AI bilet matnini va pasport rasmini tahlil qilmoqda..."):
+                        passport_image = Image.open(passport_file)
                         
-                        if final_pdf:
-                            # Har bir pasport uchun alohida yuklash tugmasi
-                            st.download_button(
-                                label=f"📥 {passport_file.name} uchun biletni yuklash",
-                                data=final_pdf,
-                                file_name=f"bileti_{passport_file.name}.pdf",
-                                mime="application/pdf",
-                                key=f"btn_{index}"
-                            )
-                    
-                    # Limitga tushmaslik uchun (oxirgisidan tashqari) 30 soniya kutamiz
-                    if index < len(uploaded_pass) - 1:
-                        st.info("Keyingi pasportga o'tish uchun 30 soniya kutilmoqda... ⏱️")
-                        time.sleep(30)
-                        )
-                else:
-                    st.error("AI hujjatlarni tahlil qila olmadi. API kalitni yoki rasmni tekshiring.")
+                        ai_natija = pasport_va_biletni_tahlil_qilish(passport_image, bilet_matni)
+                        
+                        if ai_natija:
+                            st.success(f"AI aniqlagan ma'lumotlar: {ai_natija.get('yangi_ism', '')}")
+                            final_pdf = tahrirlash_bilet(pdf_bytes, ai_natija)
+                            
+                            if final_pdf:
+                                st.download_button(
+                                    label=f"📥 {passport_file.name} uchun tayyor biletni yuklab olish 🚀",
+                                    data=final_pdf,
+                                    file_name=f"bilet_{passport_file.name}.pdf",
+                                    mime="application/pdf",
+                                    key=f"btn_dl_{index}"
+                                )
+                        
+                        # Bepul limit himoyasi uchun har safar 30 soniya kutamiz
+                        if index < len(uploaded_passports) - 1:
+                            st.info("Keyingi pasportga o'tish uchun 30 soniya kutilmoqda... ⏱️")
+                            time.sleep(30)
+                            
+                st.balloons()
+                st.success("🎉 Barcha yuklangan biletlar tayyorlandi!")
             else:
-                st.warning("Iltimos, PDF bilet va pasport rasmini yuklang.")
+                st.warning("Iltimos, PDF bilet va kamida bitta pasport rasmini yuklang.")
     else:
-        st.warning("Dasturni ishlatish uchun chap menyudan yangi Google Gemini API kalitini kiriting.")
-        # Faqat pastdagi Streamlit reklamasini yashiramiz
-hide_streamlit_style = """
-            <style>
-            footer {visibility: hidden;}
-            </style>
-            """
-st.markdown(hide_streamlit_style, unsafe_allow_html=True)
+        st.warning("Dasturdan foydalanish uchun chap menyudan yangi Google Gemini API kalitini kiriting.")
 
-# Eng tagidagi mualliflik yozuvi
+# Mualliflik muhri
 st.write("---")
 st.caption("Dasturchi: Muxammadamin 😎")
