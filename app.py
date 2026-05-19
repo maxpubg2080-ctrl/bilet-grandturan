@@ -71,20 +71,27 @@ def tahrirlash_bilet(pdf_bytes, data):
     try:
         doc = fitz.open(stream=pdf_bytes, filetype="pdf")
         for page in doc:
+            # 1. Ismni o'zgartirish
             if data.get("eski_ism") and data.get("yangi_ism"):
                 for inst in page.search_for(data["eski_ism"]):
-                    page.add_redact_annot(inst, new_text=data["yangi_ism"])
-            
+                    page.add_redact_annot(inst) # Qizil chiziq bilan yopish
+                    page.apply_redactions()      # Eski matnni olib tashlash
+                    page.insert_text(inst.tl, data["yangi_ism"], fontsize=11, color=(0, 0, 0)) # Yangisini yozish
+
+            # 2. Pasportni o'zgartirish
             if data.get("eski_pasport") and data.get("yangi_pasport"):
                 for inst in page.search_for(data["eski_pasport"]):
-                    page.add_redact_annot(inst, new_text=data["yangi_pasport"])
-            
+                    page.add_redact_annot(inst)
+                    page.apply_redactions()
+                    page.insert_text(inst.tl, data["yangi_pasport"], fontsize=11, color=(0, 0, 0))
+
+            # 3. Sanani o'zgartirish
             if data.get("eski_sana") and data.get("yangi_sana"):
                 for inst in page.search_for(data["eski_sana"]):
-                    page.add_redact_annot(inst, new_text=data["yangi_sana"])
-                    
-            page.apply_redactions()
-        
+                    page.add_redact_annot(inst)
+                    page.apply_redactions()
+                    page.insert_text(inst.tl, data["yangi_sana"], fontsize=11, color=(0, 0, 0))
+
         out_pdf = io.BytesIO()
         doc.save(out_pdf)
         doc.close()
