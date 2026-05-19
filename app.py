@@ -144,20 +144,13 @@ with col2:
                             st.success(f"✅ AI topdi: {ai_natija.get('yangi_ism', '')}")
                             final_pdf = tahrirlash_bilet(pdf_bytes, ai_natija)
                             
-                            if final_pdf: # Hamma ish tugagach, bittada yuklab olish
-if 'processed_pdfs' in st.session_state and len(st.session_state.processed_pdfs) > 0:
-    import zipfile
-    zip_buffer = io.BytesIO()
-    with zipfile.ZipFile(zip_buffer, "w") as zf:
-        for item in st.session_state.processed_pdfs:
-            zf.writestr(item["name"], item["data"])
-    
-    st.download_button(
-        label="📦 BARCHA BILETLARNI ZIP QILIB YUKLASH",
-        data=zip_buffer.getvalue(),
-        file_name="Barcha_biletlar.zip",
-        mime="application/zip"
-    )
+                            iif final_pdf:
+                               st.download_button(
+                                    label=f"📥 {passport_file.name} uchun PDF-ni yuklash",
+                                    data=final_pdf,
+                                    file_name=f"bilet_{passport_file.name}.pdf",
+                                    key=f"dl_btn_{index}"
+                                )
                         
                         # Limit himoyasi
                         if index < len(uploaded_passports) - 1 and len(api_keys) == 1:
