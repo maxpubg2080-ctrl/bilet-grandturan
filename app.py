@@ -143,16 +143,14 @@ with col2:
                 st.warning("Iltimos, PDF bilet va pasport rasmini yuklang.")
     else:
         st.warning("Dasturni ishlatish uchun chap menyudan yangi Google Gemini API kalitini kiriting.")
-        # GitHub tugmalari va reklamalarni butunlay yo'qotish uchun kod
+        # Faqat reklamalarni yashiramiz, tepa qismga tegmaymiz
 hide_streamlit_style = """
             <style>
-            #MainMenu {visibility: hidden;}
             footer {visibility: hidden;}
-            header {visibility: hidden;}
             </style>
             """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
-# Eng tagida mualliflik yozuvi (Qo'shtirnoq ichida to'g'ri yozilgan)
+# Eng tagida mualliflik yozuvi
 st.write("---")
 st.caption("Dasturchi: Muxammadamin 😎")
