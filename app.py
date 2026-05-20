@@ -17,7 +17,7 @@ with st.sidebar:
     raw_keys = st.text_input("OpenRouter API Kalit(lar)ni kiriting:", type="password", help="Kalit1, Kalit2 formatida yozing")
     api_keys = [k.strip() for k in raw_keys.split(",")] if raw_keys else []
 
-st.title("AI Yordamida Bilet Ma'lumotlarini Avtomat Almashtirish Pro (Llama-3 Version) 🚀")
+st.title("AI Yordamida Bilet Ma'lumotlarini Avtomat Almashtirish Pro (Ultra Stable) 🚀")
 
 def encode_image_to_base64(pil_image):
     """Rasm faylini AI tushunadigan base64 formatiga o'tkazish"""
@@ -26,7 +26,7 @@ def encode_image_to_base64(pil_image):
     return base64.b64encode(buffered.getvalue()).decode('utf-8')
 
 def pasport_va_biletni_tahlil_qilish(passport_image, bilet_matni, keys_list):
-    """OpenRouter orqali Llama-3-Vision modeliga ulanish funksiyasi"""
+    """OpenRouter orqali Llama-3 yoki Gemini bepul modellariga ulanish"""
     base64_image = encode_image_to_base64(passport_image)
     
     prompt = f"""
@@ -47,50 +47,60 @@ def pasport_va_biletni_tahlil_qilish(passport_image, bilet_matni, keys_list):
     }}
     """
     
-    for index, key in enumerate(keys_list):
-        try:
-            # OpenRouter API manzili va sozlamalari (Llama-3 Vision modeli ishlatiladi)
-            response = requests.post(
-                url="https://openrouter.ai/api/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {key}",
-                    "Content-Type": "application/json"
-                },
-                data=json.dumps({
-                    "model": "meta-llama/llama-3.2-11b-vision-instruct:free", # Mutlaqo bepul kuchli AI modeli
-                    "messages": [
-                        {
-                            "role": "user",
-                            "content": [
-                                {"type": "text", "text": prompt},
-                                {
-                                    "type": "image_url",
-                                    "image_url": {
-                                        "url": f"data:image/jpeg;base64,{base64_image}"
+    # OpenRouter-dagi eng yaxshi 2 ta mutlaqo bepul model ro'yxati
+    bepul_modellar = [
+        "meta-llama/llama-3.2-11b-vision-instruct:free",
+        "google/gemini-2.5-flash:free"
+    ]
+    
+    for key in keys_list:
+        for model_nomi in bepul_modellar:
+            try:
+                response = requests.post(
+                    url="https://openrouter.ai/api/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {key}",
+                        "Content-Type": "application/json"
+                    },
+                    data=json.dumps({
+                        "model": model_nomi,
+                        "messages": [
+                            {
+                                "role": "user",
+                                "content": [
+                                    {"type": "text", "text": prompt},
+                                    {
+                                        "type": "image_url",
+                                        "image_url": {
+                                            "url": f"data:image/jpeg;base64,{base64_image}"
+                                        }
                                     }
-                                }
-                            ]
-                        }
-                    ]
-                }),
-                timeout=45
-            )
-            
-            res_json = response.json()
-            ai_text = res_json['choices'][0]['message']['content'].strip()
-            
-            # JSON formatni tozalash
-            if "```json" in ai_text:
-                ai_text = ai_text.split("```json")[1].split("```")[0].strip()
-            elif "```" in ai_text:
-                ai_text = ai_text.split("```")[1].split("```")[0].strip()
+                                ]
+                            }
+                        ]
+                    }),
+                    timeout=30
+                )
                 
-            return json.loads(ai_text)
-        except Exception as e:
-            st.sidebar.warning(f"Kalit-{index+1}da xatolik yuz berdi, keyingisiga o'tilmoqda...")
-            continue
-            
-    st.error("❌ Kiritilgan OpenRouter kalitlar ishlamadi yoki server javob bermadi!")
+                res_json = response.json()
+                
+                # Agar OpenRouter xato qaytarsa, keyingi modelga o'tish
+                if 'choices' not in res_json:
+                    continue
+                    
+                ai_text = res_json['choices'][0]['message']['content'].strip()
+                
+                # JSON formatni tozalash
+                if "```json" in ai_text:
+                    ai_text = ai_text.split("```json")[1].split("```")[0].strip()
+                elif "```" in ai_text:
+                    ai_text = ai_text.split("```")[1].split("```")[0].strip()
+                    
+                return json.loads(ai_text)
+            except Exception:
+                continue # Agar biror modelda xato bo'lsa, indamay keyingisiga o'tadi
+                
+    st.error("❌ Kiritilgan OpenRouter kalitlar yoki bepul modellar hozircha band. Birozdan so'ng qayta urinib ko'ring!")
     return None
 
 def tahrirlash_bilet(pdf_bytes, data):
@@ -154,7 +164,7 @@ with col2:
                 
                 for index, passport_file in enumerate(uploaded_passports):
                     st.markdown(f"### 👤 Yo'lovchi {index+1}: {passport_file.name}")
-                    with st.spinner("Llama-3 AI tahlil qilmoqda..."):
+                    with st.spinner("AI bir nechta bepul model orqali tahlil qilmoqda..."):
                         passport_image = Image.open(passport_file)
                         ai_natija = pasport_va_biletni_tahlil_qilish(passport_image, bilet_matni, api_keys)
                         
@@ -167,7 +177,6 @@ with col2:
                                 "name": f"bilet_{passport_file.name}.pdf",
                                 "data": final_pdf
                             }
-                    # Server ketma-ket yuklanishdan charchamasligi uchun 2 soniya kutish
                     time.sleep(2)
                 st.balloons()
             else:
@@ -175,7 +184,7 @@ with col2:
     else:
         st.warning("Dasturni ishlatish uchun chap menyuga OpenRouter API kalit kiriting.")
 
-# Sahifa yangilanganda yuklash tugmalari o'chib ketmasligi uchun xotiradan chiqarish
+# Yuklash tugmalari chiqishi uchun
 if 'tayyor_biletlar' in st.session_state and st.session_state.tayyor_biletlar:
     st.write("---")
     st.subheader("📥 Tayyorlangan biletlar ro'yxati:")
