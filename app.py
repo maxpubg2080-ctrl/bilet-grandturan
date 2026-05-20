@@ -1,33 +1,42 @@
 import streamlit as st
-import google.generativeai as genai
 import fitz  # PyMuPDF
 from PIL import Image
 import io
 import json
 import time
-import re
+import requests
+import base64
 
 # Sahifa sozlamalari
 st.set_page_config(page_title="AI PDF Modifier Pro", layout="wide")
 
-# Chap menyu - Bir nechta API kalit kiritish joyi
+# Chap menyu - OpenRouter API kalit kiritish joyi
 with st.sidebar:
-    st.subheader("🔑 AI Kalitlar Tizimi")
-    st.info("Limitdan qochish uchun bir nechta kalit kiritsangiz bo'ladi (vergul bilan ajrating)")
-    raw_keys = st.text_input("Gemini API Kalit(lar)ni kiriting:", type="password", help="Kalit1, Kalit2 formatida yozing")
+    st.subheader("🔑 OpenRouter AI Tizimi")
+    st.info("Bu yerga openrouter.ai saytidan olingan bepul kalitni kiriting. Bu modelda limitlar juda katta!")
+    raw_keys = st.text_input("OpenRouter API Kalit(lar)ni kiriting:", type="password", help="Kalit1, Kalit2 formatida yozing")
     api_keys = [k.strip() for k in raw_keys.split(",")] if raw_keys else []
 
-st.title("AI Yordamida Bilet Ma'lumotlarini Avtomat Almashtirish Pro 🚀")
+st.title("AI Yordamida Bilet Ma'lumotlarini Avtomat Almashtirish Pro (Llama-3 Version) 🚀")
+
+def encode_image_to_base64(pil_image):
+    """Rasm faylini AI tushunadigan base64 formatiga o'tkazish"""
+    buffered = io.BytesIO()
+    pil_image.save(buffered, format="JPEG")
+    return base64.b64encode(buffered.getvalue()).decode('utf-8')
 
 def pasport_va_biletni_tahlil_qilish(passport_image, bilet_matni, keys_list):
+    """OpenRouter orqali Llama-3-Vision modeliga ulanish funksiyasi"""
+    base64_image = encode_image_to_base64(passport_image)
+    
     prompt = f"""
     Siz aqlli hujjatchisiz. Bilet matni ichidan yo'lovchining ESKI ismi, ESKI pasport raqami va ESKI tug'ilgan sanasini aniqlang.
     Pasport rasmidan YANGI yo'lovchining ismi, pasport raqami va tug'ilgan sanasini o'qing.
     
     Bilet matni:
-    \"{bilet_matni}\"
+    "{bilet_matni}"
     
-    Natijani faqat mana shu JSON formatida qaytaring, boshqa matn qo'shmang:
+    Natijani faqat mana shu JSON formatida qaytaring, boshqa hech qanday matn, izoh yoki kirish so'zi qo'shmang. To'g'ridan-to'g'ri JSON formatida ochiluvchi qavsdan boshlang:
     {{
         "eski_ism": "ESKI ISM",
         "yangi_ism": "YANGI ISM",
@@ -40,16 +49,48 @@ def pasport_va_biletni_tahlil_qilish(passport_image, bilet_matni, keys_list):
     
     for index, key in enumerate(keys_list):
         try:
-            genai.configure(api_key=key)
-            model = genai.GenerativeModel('gemini-1.5-flash')
-            response = model.generate_content([prompt, passport_image])
-            cleaned_text = response.text.replace("```json", "").replace("```", "").strip()
-            return json.loads(cleaned_text)
+            # OpenRouter API manzili va sozlamalari (Llama-3 Vision modeli ishlatiladi)
+            response = requests.post(
+                url="https://openrouter.ai/api/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {key}",
+                    "Content-Type": "application/json"
+                },
+                data=json.dumps({
+                    "model": "meta-llama/llama-3.2-11b-vision-instruct:free", # Mutlaqo bepul kuchli AI modeli
+                    "messages": [
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": prompt},
+                                {
+                                    "type": "image_url",
+                                    "image_url": {
+                                        "url": f"data:image/jpeg;base64,{base64_image}"
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                }),
+                timeout=45
+            )
+            
+            res_json = response.json()
+            ai_text = res_json['choices'][0]['message']['content'].strip()
+            
+            # JSON formatni tozalash
+            if "```json" in ai_text:
+                ai_text = ai_text.split("```json")[1].split("```")[0].strip()
+            elif "```" in ai_text:
+                ai_text = ai_text.split("```")[1].split("```")[0].strip()
+                
+            return json.loads(ai_text)
         except Exception as e:
-            st.sidebar.warning(f"Kalit-{index+1} xato: o'tilmoqda...")
+            st.sidebar.warning(f"Kalit-{index+1}da xatolik yuz berdi, keyingisiga o'tilmoqda...")
             continue
             
-    st.error("❌ Barcha kiritilgan API kalitlarda limit tugadi yoki xatolik!")
+    st.error("❌ Kiritilgan OpenRouter kalitlar ishlamadi yoki server javob bermadi!")
     return None
 
 def tahrirlash_bilet(pdf_bytes, data):
@@ -113,7 +154,7 @@ with col2:
                 
                 for index, passport_file in enumerate(uploaded_passports):
                     st.markdown(f"### 👤 Yo'lovchi {index+1}: {passport_file.name}")
-                    with st.spinner("AI tahlil qilmoqda..."):
+                    with st.spinner("Llama-3 AI tahlil qilmoqda..."):
                         passport_image = Image.open(passport_file)
                         ai_natija = pasport_va_biletni_tahlil_qilish(passport_image, bilet_matni, api_keys)
                         
@@ -126,13 +167,15 @@ with col2:
                                 "name": f"bilet_{passport_file.name}.pdf",
                                 "data": final_pdf
                             }
+                    # Server ketma-ket yuklanishdan charchamasligi uchun 2 soniya kutish
+                    time.sleep(2)
                 st.balloons()
             else:
                 st.error("Iltimos, oldin bilet PDF faylini va pasport rasmlarini yuklang!")
     else:
-        st.warning("Dasturni ishlatish uchun chap menyuga API kalit kiriting.")
+        st.warning("Dasturni ishlatish uchun chap menyuga OpenRouter API kalit kiriting.")
 
-# Sahifa yangilanganda yuklash tugmalari yo'qolib ketmasligi uchun!
+# Sahifa yangilanganda yuklash tugmalari o'chib ketmasligi uchun xotiradan chiqarish
 if 'tayyor_biletlar' in st.session_state and st.session_state.tayyor_biletlar:
     st.write("---")
     st.subheader("📥 Tayyorlangan biletlar ro'yxati:")
@@ -143,5 +186,6 @@ if 'tayyor_biletlar' in st.session_state and st.session_state.tayyor_biletlar:
             file_name=bilet['name'],
             key=f"download_{key}"
         )
-        st.write("---")
+
+st.write("---")
 st.markdown("<h4 style='text-align: center; color: gray;'>👨‍💻 Dasturchi: Muxammadamin</h4>", unsafe_allow_html=True)
