@@ -7,30 +7,33 @@ import time
 import google.generativeai as genai
 
 # Sahifa sozlamalari
-st.set_page_config(page_title="AI PDF Modifier Ultra", layout="wide")
+st.set_page_config(page_title="AI PDF Modifier Ultra Pro", layout="wide")
 
 # Chap menyu - Gemini API kalit kiritish joyi
 with st.sidebar:
-    st.subheader("🔑 Google Gemini Tizimi")
-    st.info("Bu yerga bir nechta Gemini kalitlarini vergul bilan ajratib kiriting. Tizim avtomat zaxira kalitga o'tadi!")
-    raw_keys = st.text_input("Gemini API Kalit(lar)ni kiriting:", type="password", help="Kalit1, Kalit2, Kalit3 formatida")
+    st.subheader("🔑 Google AI Tizimi")
+    st.info("Bu yerga aistudio.google.com saytidan olingan bepul kalitni kiriting.")
+    raw_keys = st.text_input("Gemini API Kalit(lar)ni kiriting:", type="password", help="Kalitlarni vergul bilan ajrating")
     api_keys = [k.strip() for k in raw_keys.split(",")] if raw_keys else []
 
 st.title("AI Yordamida Bilet Ma'lumotlarini Avtomat Almashtirish Pro 🚀")
 
-def compress_image(pil_image):
-    """Rasmni AI qiynalmasligi va limitga tushmasligi uchun maksimal darajada siqish"""
-    # Hajmini kichiklashtirish
-    pil_image.thumbnail((800, 800))
+def prepare_image_for_gemini(pil_image):
+    """Rasmni maksimal darajada yengil formatga o'tkazish va limitlardan qochish"""
+    # Rasmni AI qiynalmasligi uchun ixcham o'lchamga keltiramiz
+    pil_image.thumbnail((600, 600))
     img_byte_arr = io.BytesIO()
-    # Sifatini pasaytirib saqlash (matn baribir o'qiladi)
-    pil_image.save(img_byte_arr, format='JPEG', quality=60)
-    return Image.open(img_byte_arr)
+    # Sifatini sezilarli pasaytiramiz, lekin matn o'qiladigan holatda qoladi
+    pil_image.save(img_byte_arr, format='JPEG', quality=50)
+    
+    return {
+        'mime_type': 'image/jpeg',
+        'data': img_byte_arr.getvalue()
+    }
 
 def pasport_va_biletni_tahlil_qilish(passport_image, bilet_matni, keys_list):
-    """Zaxira kalitlar bilan ishlovchi aqlli va barqaror AI funksiyasi"""
-    # Rasmni yengil qilib siqib olamiz
-    siqilgan_rasm = compress_image(passport_image)
+    """Eng yuqori chidamlilikka ega model va zaxira kalitlar tizimi"""
+    image_data = prepare_image_for_gemini(passport_image)
     
     prompt = f"""
     Siz aqlli hujjatchisiz. Bilet matni ichidan yo'lovchining ESKI ismi, ESKI pasport raqami va ESKI tug'ilgan sanasini aniqlang.
@@ -50,17 +53,16 @@ def pasport_va_biletni_tahlil_qilish(passport_image, bilet_matni, keys_list):
     }}
     """
     
-    # Har bir kiritilgan kalitni navbatma-navbat tekshirish
     for index, key in enumerate(keys_list):
         try:
             genai.configure(api_key=key)
-            # Eng ishonchli rasm o'qiydigan model
-            model = genai.GenerativeModel('gemini-1.5-flash')
+            # Eng so'nggi va eng katta limitga ega bepul model versiyasi
+            model = genai.GenerativeModel('gemini-2.5-flash')
             
-            response = model.generate_content([prompt, siqilgan_rasm])
+            response = model.generate_content([prompt, image_data])
             ai_text = response.text.strip()
             
-            # JSON matnni tozalash
+            # JSON formatni tozalash qismi
             if "```json" in ai_text:
                 ai_text = ai_text.split("```json")[1].split("```")[0].strip()
             elif "```" in ai_text:
@@ -68,14 +70,13 @@ def pasport_va_biletni_tahlil_qilish(passport_image, bilet_matni, keys_list):
                 
             return json.loads(ai_text)
         except Exception as e:
-            # Agar limit tugasa yoki xato bo'lsa, keyingi kalitga o'tish
-            st.sidebar.warning(f"⚠️ Kalit-{index+1}da cheklov! Keyingi kalitga o'tilmoqda...")
+            st.sidebar.warning(f"⚠️ Kalit-{index+1} rad etildi. Keyingisiga o'tilmoqda...")
             continue
             
     return None
 
 def tahrirlash_bilet(pdf_bytes, data):
-    """Eski va yangi PyMuPDF versiyalarida 100% xatosiz ishlaydigan tahrirlash"""
+    """Hamma PyMuPDF versiyalarida 100% xatosiz ishlaydigan qayta chizish funksiyasi"""
     try:
         doc = fitz.open(stream=pdf_bytes, filetype="pdf")
         for page in doc:
@@ -89,9 +90,9 @@ def tahrirlash_bilet(pdf_bytes, data):
                 if eski and yangi:
                     text_instances = page.search_for(eski)
                     for inst in text_instances:
-                        # Matn ustini oq to'rtburchak bilan yopish (O'chirish)
+                        # Eski matn oq to'rtburchak bilan butunlay yopiladi
                         page.draw_rect(inst, color=(1, 1, 1), fill=(1, 1, 1))
-                        # Yangi matnni yozish
+                        # Ustidan yangi matn chiroyli qilib yoziladi
                         page.insert_text(inst.tl, yangi, fontsize=9, color=(0, 0, 0))
 
         out_pdf = io.BytesIO()
@@ -99,7 +100,7 @@ def tahrirlash_bilet(pdf_bytes, data):
         doc.close()
         return out_pdf.getvalue()
     except Exception as e:
-        st.error(f"PDF tahrirlashda xatolik: {str(e)}")
+        st.error(f"PDF tahrirlashda texnik xatolik: {str(e)}")
         return None
 
 col1, col2 = st.columns(2)
@@ -130,7 +131,7 @@ with col2:
                 
                 for index, passport_file in enumerate(uploaded_passports):
                     st.markdown(f"### 👤 Yo'lovchi {index+1}: {passport_file.name}")
-                    with st.spinner("AI hujjatni tahlil qilmoqda (Rasm siqilmoqda)..."):
+                    with st.spinner("AI ma'lumotlarni o'qimoqda..."):
                         passport_image = Image.open(passport_file)
                         ai_natija = pasport_va_biletni_tahlil_qilish(passport_image, bilet_matni, api_keys)
                         
@@ -144,17 +145,16 @@ with col2:
                                 "data": final_pdf
                             }
                     else:
-                        st.error("❌ Barcha kiritilgan API kalitlarda limit tugagan yoki xatolik bor!")
+                        st.error("❌ Limitlar tufayli bu pasportni qayta ishlab bo'lmadi.")
                     
-                    # Google RPM limitiga tushmaslik uchun majburiy 4 soniya kutish
-                    time.sleep(4)
+                    # Google tizimi xato bermasligi uchun qisqa tanaffus
+                    time.sleep(5)
                 st.balloons()
             else:
                 st.error("Iltimos, oldin bilet PDF faylini va pasport rasmlarini yuklang!")
     else:
         st.warning("Dasturni ishlatish uchun chap menyuga Google Gemini API kalitini kiriting.")
 
-# Yuklash tugmalari chiqishi uchun
 if 'tayyor_biletlar' in st.session_state and st.session_state.tayyor_biletlar:
     st.write("---")
     st.subheader("📥 Tayyorlangan biletlar ro'yxati:")
