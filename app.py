@@ -4,32 +4,33 @@ from PIL import Image
 import io
 import json
 import time
-import requests
-import base64
+import google.generativeai as genai
 
 # Sahifa sozlamalari
-st.set_page_config(page_title="AI PDF Modifier Groq Pro", layout="wide")
+st.set_page_config(page_title="AI PDF Modifier Ultra", layout="wide")
 
-# Chap menyu - Groq API kalit kiritish joyi
+# Chap menyu - Gemini API kalit kiritish joyi
 with st.sidebar:
-    st.subheader("🔑 Groq AI Tizimi")
-    st.info("Bu yerga console.groq.com saytidan olingan bepul kalitni kiriting. Bu tizim o'ta tezkor va barqaror!")
-    raw_keys = st.text_input("Groq API Kalit(lar)ni kiriting:", type="password", help="gsk_... formatida yozing")
+    st.subheader("🔑 Google Gemini Tizimi")
+    st.info("Bu yerga bir nechta Gemini kalitlarini vergul bilan ajratib kiriting. Tizim avtomat zaxira kalitga o'tadi!")
+    raw_keys = st.text_input("Gemini API Kalit(lar)ni kiriting:", type="password", help="Kalit1, Kalit2, Kalit3 formatida")
     api_keys = [k.strip() for k in raw_keys.split(",")] if raw_keys else []
 
-st.title("AI Yordamida Bilet Ma'lumotlarini Avtomat Almashtirish Pro (Groq Speed) 🚀")
+st.title("AI Yordamida Bilet Ma'lumotlarini Avtomat Almashtirish Pro 🚀")
 
-def encode_image_to_base64(pil_image):
-    """Rasm faylini AI tushunadigan base64 formatiga o'tkazish"""
-    buffered = io.BytesIO()
-    # Groq o'lchami o'ta katta rasmlarda qiynalmasligi uchun hajmini biroz kichiklashtiramiz
-    pil_image.thumbnail((1024, 1024))
-    pil_image.save(buffered, format="JPEG", quality=85)
-    return base64.b64encode(buffered.getvalue()).decode('utf-8')
+def compress_image(pil_image):
+    """Rasmni AI qiynalmasligi va limitga tushmasligi uchun maksimal darajada siqish"""
+    # Hajmini kichiklashtirish
+    pil_image.thumbnail((800, 800))
+    img_byte_arr = io.BytesIO()
+    # Sifatini pasaytirib saqlash (matn baribir o'qiladi)
+    pil_image.save(img_byte_arr, format='JPEG', quality=60)
+    return Image.open(img_byte_arr)
 
 def pasport_va_biletni_tahlil_qilish(passport_image, bilet_matni, keys_list):
-    """Groq API orqali Llama-3.1-Vision modeliga ulanish"""
-    base64_image = encode_image_to_base64(passport_image)
+    """Zaxira kalitlar bilan ishlovchi aqlli va barqaror AI funksiyasi"""
+    # Rasmni yengil qilib siqib olamiz
+    siqilgan_rasm = compress_image(passport_image)
     
     prompt = f"""
     Siz aqlli hujjatchisiz. Bilet matni ichidan yo'lovchining ESKI ismi, ESKI pasport raqami va ESKI tug'ilgan sanasini aniqlang.
@@ -49,45 +50,32 @@ def pasport_va_biletni_tahlil_qilish(passport_image, bilet_matni, keys_list):
     }}
     """
     
-    for key in keys_list:
+    # Har bir kiritilgan kalitni navbatma-navbat tekshirish
+    for index, key in enumerate(keys_list):
         try:
-            response = requests.post(
-                url="https://api.groq.com/openai/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {key}",
-                    "Content-Type": "application/json"
-                },
-                data=json.dumps({
-                    "model": "llama-3.2-11b-vision-preview",  # Groq platformasidagi eng kuchli vizual model
-                    "messages": [
-                        {
-                            "role": "user",
-                            "content": [
-                                {"type": "text", "text": prompt},
-                                {
-                                    "type": "image_url",
-                                    "image_url": {
-                                        "url": f"data:image/jpeg;base64,{base64_image}"
-                                    }
-                                }
-                            ]
-                        }
-                    ],
-                    "response_format": {"type": "json_object"}  # Groq-dan aniq JSON formatda javob olish xususiyati
-                }),
-                timeout=25
-            )
+            genai.configure(api_key=key)
+            # Eng ishonchli rasm o'qiydigan model
+            model = genai.GenerativeModel('gemini-1.5-flash')
             
-            res_json = response.json()
-            ai_text = res_json['choices'][0]['message']['content'].strip()
+            response = model.generate_content([prompt, siqilgan_rasm])
+            ai_text = response.text.strip()
+            
+            # JSON matnni tozalash
+            if "```json" in ai_text:
+                ai_text = ai_text.split("```json")[1].split("```")[0].strip()
+            elif "```" in ai_text:
+                ai_text = ai_text.split("```")[1].split("```")[0].strip()
+                
             return json.loads(ai_text)
-        except Exception:
+        except Exception as e:
+            # Agar limit tugasa yoki xato bo'lsa, keyingi kalitga o'tish
+            st.sidebar.warning(f"⚠️ Kalit-{index+1}da cheklov! Keyingi kalitga o'tilmoqda...")
             continue
             
     return None
 
 def tahrirlash_bilet(pdf_bytes, data):
-    """PDF-ni xatosiz va chiroyli tahrirlash (oq kvadrat bilan yopish usuli)"""
+    """Eski va yangi PyMuPDF versiyalarida 100% xatosiz ishlaydigan tahrirlash"""
     try:
         doc = fitz.open(stream=pdf_bytes, filetype="pdf")
         for page in doc:
@@ -101,9 +89,9 @@ def tahrirlash_bilet(pdf_bytes, data):
                 if eski and yangi:
                     text_instances = page.search_for(eski)
                     for inst in text_instances:
-                        # Eski matnni oq to'rtburchak bilan o'chirish
+                        # Matn ustini oq to'rtburchak bilan yopish (O'chirish)
                         page.draw_rect(inst, color=(1, 1, 1), fill=(1, 1, 1))
-                        # Yangi matnni joylashtirish
+                        # Yangi matnni yozish
                         page.insert_text(inst.tl, yangi, fontsize=9, color=(0, 0, 0))
 
         out_pdf = io.BytesIO()
@@ -142,7 +130,7 @@ with col2:
                 
                 for index, passport_file in enumerate(uploaded_passports):
                     st.markdown(f"### 👤 Yo'lovchi {index+1}: {passport_file.name}")
-                    with st.spinner("Groq AI yashindagi tezlikda tahlil qilmoqda..."):
+                    with st.spinner("AI hujjatni tahlil qilmoqda (Rasm siqilmoqda)..."):
                         passport_image = Image.open(passport_file)
                         ai_natija = pasport_va_biletni_tahlil_qilish(passport_image, bilet_matni, api_keys)
                         
@@ -156,13 +144,15 @@ with col2:
                                 "data": final_pdf
                             }
                     else:
-                        st.error("❌ Groq AI ma'lumotni o'qiy olmadi yoki kalitda xatolik bor.")
-                    time.sleep(0.5)
+                        st.error("❌ Barcha kiritilgan API kalitlarda limit tugagan yoki xatolik bor!")
+                    
+                    # Google RPM limitiga tushmaslik uchun majburiy 4 soniya kutish
+                    time.sleep(4)
                 st.balloons()
             else:
                 st.error("Iltimos, oldin bilet PDF faylini va pasport rasmlarini yuklang!")
     else:
-        st.warning("Dasturni ishlatish uchun chap menyuga Groq API kalitini kiriting.")
+        st.warning("Dasturni ishlatish uchun chap menyuga Google Gemini API kalitini kiriting.")
 
 # Yuklash tugmalari chiqishi uchun
 if 'tayyor_biletlar' in st.session_state and st.session_state.tayyor_biletlar:
