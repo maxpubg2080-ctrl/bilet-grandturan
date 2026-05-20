@@ -71,20 +71,27 @@ def tahrirlash_bilet(pdf_bytes, data):
     try:
         doc = fitz.open(stream=pdf_bytes, filetype="pdf")
         for page in doc:
+            # 1. Ismni tahrirlash
             if data.get("eski_ism") and data.get("yangi_ism"):
                 for inst in page.search_for(data["eski_ism"]):
-                    page.add_redact_annot(inst, new_text=data["yangi_ism"])
-            
+                    page.add_redact_annot(inst) # Faqat koordinatani beramiz
+                    page.apply_redactions() # Eski matnni o'chiramiz
+                    page.insert_text(inst.tl, data["yangi_ism"], fontsize=10, color=(0, 0, 0)) # Yangisini yozamiz
+
+            # 2. Pasport raqamini tahrirlash
             if data.get("eski_pasport") and data.get("yangi_pasport"):
                 for inst in page.search_for(data["eski_pasport"]):
-                    page.add_redact_annot(inst, new_text=data["yangi_pasport"])
-            
+                    page.add_redact_annot(inst)
+                    page.apply_redactions()
+                    page.insert_text(inst.tl, data["yangi_pasport"], fontsize=10, color=(0, 0, 0))
+
+            # 3. Tug'ilgan sanani tahrirlash
             if data.get("eski_sana") and data.get("yangi_sana"):
                 for inst in page.search_for(data["eski_sana"]):
-                    page.add_redact_annot(inst, new_text=data["yangi_sana"])
-                    
-            page.apply_redactions()
-        
+                    page.add_redact_annot(inst)
+                    page.apply_redactions()
+                    page.insert_text(inst.tl, data["yangi_sana"], fontsize=10, color=(0, 0, 0))
+
         out_pdf = io.BytesIO()
         doc.save(out_pdf)
         doc.close()
@@ -134,12 +141,29 @@ with col2:
                             final_pdf = tahrirlash_bilet(pdf_bytes, ai_natija)
                             
                             if final_pdf:
-                                st.download_button(
-                                    label=f"📥 {passport_file.name} uchun PDF-ni yuklash",
-                                    data=final_pdf,
-                                    file_name=f"bilet_{passport_file.name}.pdf",
-                                    key=f"dl_btn_{index}"
-                                )
+            # Fayllar o'chib ketmasligi uchun xotiraga solamiz
+            if 'tayyor_biletlar' not in st.session_state:
+                st.session_state.tayyor_biletlar = {}
+            
+            # Har bir yo'lovchi biletini kalit (index) bilan saqlaymiz
+            st.session_state.tayyor_biletlar[f"bilet_{index}"] = {
+                "name": f"bilet_{passport_file.name}.pdf",
+                "data": final_pdf
+            }
+
+# --- SIKLDAN TASHQARIDA (for sikli tugagan qatordan, eng chekkadan yoziladi) ---
+# Endi xotirada qolgan barcha biletlarni ekranga chiqaramiz:
+if 'tayyor_biletlar' in st.session_state and st.session_state.tayyor_biletlar:
+    st.write("---")
+    st.subheader("📥 Tayyor biletlarni yuklab olish:")
+    
+    for key, bilet in st.session_state.tayyor_biletlar.items():
+        st.download_button(
+            label=f"💾 {bilet['name']} faylini saqlash",
+            data=bilet['data'],
+            file_name=bilet['name'],
+            key=f"download_{key}" # Noyob kalit
+        )
                         
                         # Limit himoyasi
                         if index < len(uploaded_passports) - 1 and len(api_keys) == 1:
