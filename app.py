@@ -64,25 +64,22 @@ def tahrirlash_bilet(pdf_bytes, data):
         for page in doc:
             # 1. Ismni o'zgartirish
             if data.get("eski_ism") and data.get("yangi_ism"):
-                for inst in page.search_for(data["eski_ism"]):
-                    page.add_redact_annot(inst)
-                    page.apply_redactions()
-                    page.insert_text(inst.tl, data["yangi_ism"], fontsize=10, color=(0, 0, 0))
-
+    for inst in page.search_for(data["eski_ism"]):
+        page.add_redact_annot(inst) # new_text= olib tashlandi
+        page.apply_redactions()
+        page.insert_text(inst.tl, data["yangi_ism"], fontsize=10, color=(0,0,0))
             # 2. Pasportni o'zgartirish
             if data.get("eski_pasport") and data.get("yangi_pasport"):
-                for inst in page.search_for(data["eski_pasport"]):
-                    page.add_redact_annot(inst)
-                    page.apply_redactions()
-                    page.insert_text(inst.tl, data["yangi_pasport"], fontsize=10, color=(0, 0, 0))
-
+    for inst in page.search_for(data["eski_pasport"]):
+        page.add_redact_annot(inst) # new_text= olib tashlandi
+        page.apply_redactions()
+        page.insert_text(inst.tl, data["yangi_pasport"], fontsize=10, color=(0,0,0))
             # 3. Sanani o'zgartirish
             if data.get("eski_sana") and data.get("yangi_sana"):
-                for inst in page.search_for(data["eski_sana"]):
-                    page.add_redact_annot(inst)
-                    page.apply_redactions()
-                    page.insert_text(inst.tl, data["yangi_sana"], fontsize=10, color=(0, 0, 0))
-
+    for inst in page.search_for(data["eski_sana"]):
+        page.add_redact_annot(inst) # new_text= olib tashlandi
+        page.apply_redactions()
+        page.insert_text(inst.tl, data["yangi_sana"], fontsize=10, color=(0,0,0))
         out_pdf = io.BytesIO()
         doc.save(out_pdf)
         doc.close()
@@ -135,6 +132,9 @@ with col2:
                         final_pdf = tahrirlash_bilet(pdf_bytes, ai_natija)
                         
                         if final_pdf:
+                            if 'tayyor_biletlar' not in st.session_state:
+                                st.session_state.tayyor_biletlar = {}
+                            
                             st.session_state.tayyor_biletlar[f"bilet_{index}"] = {
                                 "name": f"bilet_{passport_file.name}.pdf",
                                 "data": final_pdf
@@ -145,7 +145,7 @@ with col2:
     else:
         st.warning("Dasturni ishlatish uchun chap menyuga API kalit kiriting.")
 
-# Sahifa yangilanganda yuklash tugmalari yo'qolib ketmasligi uchun sikldan tashqarida chiqariladi
+# Sahifa yangilanganda yuklash tugmalari yo'qolib ketmasligi uchun eng chekkadan yoziladi
 if 'tayyor_biletlar' in st.session_state and st.session_state.tayyor_biletlar:
     st.write("---")
     st.subheader("📥 Tayyorlangan biletlar ro'yxati:")
